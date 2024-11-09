@@ -103,8 +103,7 @@ class Select(private val table: Table) {
             else -> {
                 sql.append("SELECT ")
                 selectColumns.forEachIndexed { index, column ->
-                    sql.append("${column.table().tableName}.${column.key()}")
-                    //sql.append(column.key())
+                    sql.append("${column.table().tableNameShort()}.${column.key()}")
                     if (index < selectColumns.size - 1) sql.append(", ")
                 }
             }
