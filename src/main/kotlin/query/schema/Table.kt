@@ -83,7 +83,7 @@ abstract class Table(val tableName: String, protected val tablePrefix: Boolean =
         @Suppress("UNCHECKED_CAST") return primaryKey as Column<T>
     }
 
-    fun tableShortName(): String = tableName.split("_").map { it.first() }.joinToString("")
+    fun shortName(): String = tableName.split("_").map { it.first() }.joinToString("")
 }
 
 /**
@@ -130,11 +130,11 @@ fun Table.insert(vararg columns: Column<*>): Insert = Insert(this).insert(*colum
 
 fun Table.select(vararg columns: Column<*>): Select = Select(this).select(*columns)
 
-fun Table.selectPrimary(value: Int?, vararg columns: Column<*>): Select = Select(this).selectPrimary(value, *columns)
+fun Table.selectPrimary(value: Any, vararg columns: Column<*>): Select = Select(this).selectPrimary(value, *columns)
 
 fun Table.update(block: (Update) -> Unit): Update = Update(this).apply(block)
 
-fun Table.updatePrimary(value: Int?, block: (Update) -> Unit) = Update(this).updatePrimary(value, block)
+fun Table.updatePrimary(value: Any, block: (Update) -> Unit) = Update(this).updatePrimary(value, block)
 
 fun Table.deleteWhere(init: Where.() -> Unit): Delete = Delete(this).deleteWhere(init)
 

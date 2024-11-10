@@ -18,7 +18,7 @@ class Delete(private val table: Table) {
         return this
     }
 
-    fun <T : Any> deletePrimary(value: T?): Delete {
+    fun <T : Any> deletePrimary(value: T): Delete {
         val primaryKey = table.primaryKey<T>()
         return deleteWhere { primaryKey eq value }
     }

@@ -25,8 +25,8 @@ class Select(private val table: Table) {
         return this
     }
 
-    fun selectPrimary(value: Int?, vararg columns: Column<*>): Select {
-        val primaryKey = table.primaryKey<Int>()
+    fun selectPrimary(value: Any, vararg columns: Column<*>): Select {
+        val primaryKey = table.primaryKey<Any>()
         val selectWithCondition = where { primaryKey eq value }
         selectWithCondition.select(*columns)
         return selectWithCondition
@@ -98,7 +98,7 @@ class Select(private val table: Table) {
             else -> {
                 sql.append("SELECT ")
                 selectColumns.forEachIndexed { index, column ->
-                    sql.append("${column.table().tableNameShort()}.${column.key()}")
+                    sql.append("${column.table().shortName()}.${column.key()}")
                     if (index < selectColumns.size - 1) sql.append(", ")
                 }
             }

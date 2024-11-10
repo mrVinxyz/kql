@@ -28,8 +28,8 @@ class Update(private val table: Table) {
         return this
     }
 
-    fun updatePrimary(value: Int?, init: (Update) -> Unit): Update {
-        val primaryKey = table.primaryKey<Int>()
+    fun updatePrimary(value: Any, init: (Update) -> Unit): Update {
+        val primaryKey = table.primaryKey<Any>()
         val updateWithCondition = update {
             where { primaryKey eq value }
             init(this)
