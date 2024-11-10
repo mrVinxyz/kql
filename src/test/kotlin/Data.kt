@@ -6,46 +6,27 @@ import query.schema.createTable
 import java.math.BigDecimal
 import java.sql.Connection
 
-object Accounts : Table("account") {
-    val accountId = integer("id").setPrimaryKey()
-    val balance = decimal("balance")
-    val interestRate = float("interest_rate")
-    val accountType = text("type")
-    val isActive = boolean("is_active")
-    val createdAt = long("created_at")
-    val lastUpdatedAt = long("last_updated_at")
+class WizardsTable : Table("wizards") {
+    val id = integer("id").setPrimaryKey()
+    val name = text("name")
+    val level = integer("level")
+    val powerLevel = float("power_level")
+    val manaCapacity = double("mana_capacity")
+    val experiencePoints = double("experience_points")
 }
 
-data class Account(
-    val accountId: Int? = null,
-    val balance: BigDecimal? = null,
-    val interestRate: Float? = null,
-    val accountType: String? = null,
-    val isActive: Boolean? = null,
-    val createdAt: Long? = null,
-    val lastUpdatedAt: Long? = null,
-)
-
-fun Accounts.createAccountTable(conn: Connection) =
-    this.createTable().exec(conn)
-
-object Transactions : Table("account_transaction", false) {
-    val transactionId = integer("transaction_id").setPrimaryKey()
-    val transactionTo = text("transaction_to")
-    val transactionFrom = text("transaction_from")
-    val transactionAmount = decimal("transaction_amount")
-    val transactionFee = double("transaction_fee")
-    val transactionType = column<String>("transaction_type")
+class SpellsTable : Table("spells") {
+    val id = integer("id").setPrimaryKey()
+    val name = text("name")
+    val description = text("description")
+    val manaCost = double("mana_cost")
+    val castingTime = double("casting_time")
+    val damage = integer("damage")
+    val isAoe = boolean("is_aoe")
+    val successRate = double("success_rate")
 }
 
-data class Transaction(
-    val transactionId: Int? = null,
-    val transactionTo: String? = null,
-    val transactionFrom: String? = null,
-    val transactionAmount: Double? = null,
-    val transactionFee: Double? = null,
-    val transactionType: String? = null,
-)
-
-fun Transactions.createTransactionTable(conn: Connection) =
-    this.createTable().exec(conn)
+class WizardSpellsTable : Table("wizard_spells") {
+    val wizardId = integer("wizard_id")
+    val spellId = integer("spell_id")
+}
