@@ -82,6 +82,8 @@ abstract class Table(val tableName: String, protected val tablePrefix: Boolean =
         if (primaryKey == null) primaryKey = columns.first()
         @Suppress("UNCHECKED_CAST") return primaryKey as Column<T>
     }
+
+    fun tableShortName(): String = tableName.split("_").map { it.first() }.joinToString("")
 }
 
 /**
