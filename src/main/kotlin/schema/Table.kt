@@ -1,30 +1,34 @@
-package query.schema
+package schema
 
 import query.Query
-import query.expr.Delete
-import query.expr.Insert
-import query.expr.Select
-import query.expr.Update
-import query.expr.Where
-import query.setParameters
 import java.math.BigDecimal
-import java.sql.Connection
+import schema.ColumnType.BOOLEAN
+import schema.ColumnType.DECIMAL
+import schema.ColumnType.DOUBLE
+import schema.ColumnType.FLOAT
+import schema.ColumnType.INT
+import schema.ColumnType.LONG
+import schema.ColumnType.STRING
 
 /**
  * The `Table` class represents the structure of a database table.
  * It is designed to be extended by specific table implementations.
  *
  * @param tableName The name of the table in the database.
- * @param tablePrefix A flag to determine whether the table name should be prefixed to column names (default is `true`).
+ * @param usePrefix A flag to determine whether the table name should be prefixed to column names (default is `true`).
  */
-abstract class Table(val tableName: String, protected val tablePrefix: Boolean = false) {
+abstract class Table(
+    val tableName: String,
+    protected val usePrefix: Boolean = false,
+    private val useAlias: String? = null
+) {
     protected val columns = mutableListOf<Column<*>>()
     private var primaryKey: Column<*>? = null
 
     /**
      * Dynamically creates a column for the given key (name) and inferred type [T].
      *
-     * The column is prefixed with the table name if [tablePrefix] is set to `true`.
+     * The column is prefixed with the table name if [usePrefix] is set to `true`.
      * The function also maps the type [T] to a corresponding [ColumnType].
      *
      * @param key The name of the column (without the table prefix).
@@ -33,17 +37,17 @@ abstract class Table(val tableName: String, protected val tablePrefix: Boolean =
     protected inline fun <reified T : Any> column(key: String): Column<T> {
         val columnType =
             when (T::class) {
-                String::class -> ColumnType.STRING
-                Int::class -> ColumnType.INT
-                Long::class -> ColumnType.LONG
-                Float::class -> ColumnType.FLOAT
-                Double::class -> ColumnType.DOUBLE
-                BigDecimal::class -> ColumnType.DECIMAL
-                Boolean::class -> ColumnType.BOOLEAN
+                String::class -> STRING
+                Int::class -> INT
+                Long::class -> LONG
+                Float::class -> FLOAT
+                Double::class -> DOUBLE
+                BigDecimal::class -> DECIMAL
+                Boolean::class -> BOOLEAN
                 else -> throw IllegalArgumentException("Unsupported type: ${T::class}")
             }
 
-        val parsedKey = if (tablePrefix) tableName.plus("_").plus(key) else key
+        val parsedKey = if (usePrefix) tableName.plus("_").plus(key) else key
         val column = Column<T>(parsedKey, columnType, this)
         columns.add(column)
 
@@ -58,6 +62,8 @@ abstract class Table(val tableName: String, protected val tablePrefix: Boolean =
     protected fun double(key: String): Column<Double> = column(key)
     protected fun decimal(key: String): Column<BigDecimal> = column(key)
     protected fun boolean(key: String): Column<Boolean> = column(key)
+    protected fun timestamp(key: String): Column<Long> = column(key)
+    protected fun dateText(key: String): Column<String> = column(key)
 
     /**
      * Marks the current column as the primary key.
@@ -83,7 +89,7 @@ abstract class Table(val tableName: String, protected val tablePrefix: Boolean =
         @Suppress("UNCHECKED_CAST") return primaryKey as Column<T>
     }
 
-    fun shortName(): String = tableName.split("_").map { it.first() }.joinToString("")
+    fun alias(): String = useAlias ?: tableName.split("_").map { it.first() }.joinToString("")
 }
 
 /**
@@ -123,59 +129,3 @@ fun Table.createTable(): Query {
     return Query(sql.toString())
 }
 
-
-fun Table.insert(init: Insert.() -> Unit): Insert = Insert(this).apply(init)
-
-fun Table.insert(vararg columns: Column<*>): Insert = Insert(this).insert(*columns)
-
-fun Table.select(vararg columns: Column<*>): Select = Select(this).select(*columns)
-
-fun Table.selectPrimary(value: Any, vararg columns: Column<*>): Select = Select(this).selectPrimary(value, *columns)
-
-fun Table.update(block: (Update) -> Unit): Update = Update(this).apply(block)
-
-fun Table.updatePrimary(value: Any, block: (Update) -> Unit) = Update(this).updatePrimary(value, block)
-
-fun Table.deleteWhere(init: Where.() -> Unit): Delete = Delete(this).deleteWhere(init)
-
-fun Table.deletePrimary(value: Any): Delete = Delete(this).deletePrimary(value)
-
-fun Table.recordsCount(conn: Connection, block: Where.() -> Unit): Result<Int> {
-    val sql = StringBuilder("SELECT COUNT(*) FROM ${this.tableName}")
-    val where = Where()
-    block(where)
-
-    val clauses = where.whereClauses()
-    sql.append(clauses.first)
-
-    return runCatching {
-        conn.prepareStatement(sql.toString()).use { stmt ->
-            stmt.setParameters(clauses.second)
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) rs.getInt(1) else 0
-            }
-        }
-    }
-}
-
-inline fun <reified T> Table.recordExistsBy(
-    conn: Connection,
-    column: Column<*>,
-    value: T,
-): Result<Boolean> {
-    val sql = "SELECT EXISTS(SELECT 1 FROM ${this.tableName} WHERE ${column.key()} = ?);"
-
-    return runCatching {
-        conn.prepareStatement(sql).use { stmt ->
-            stmt.setParameters(listOf(value))
-            stmt.executeQuery().use { rs ->
-                rs.next() && rs.getBoolean(1)
-            }
-        }
-    }
-}
-
-inline fun <reified T : Any> Table.recordExists(
-    conn: Connection,
-    value: T
-): Result<Boolean> = recordExistsBy(conn, this.primaryKey<Int>(), value)

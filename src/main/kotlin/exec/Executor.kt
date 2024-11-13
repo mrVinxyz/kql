@@ -1,7 +1,8 @@
-package query
+package exec
 
 import java.sql.Connection
 import java.sql.Statement
+import query.Query
 
 /**
  * The `Executor` object provides a set of utility functions to execute SQL queries and map their results.
@@ -60,7 +61,7 @@ object Executor {
                 stmt.executeUpdate()
 
                 stmt.generatedKeys.use { rs ->
-                    Row(rs).get<T>(1) as T
+                    Row(rs).get<T>(1)
                 }
             }
         }.onFailure {

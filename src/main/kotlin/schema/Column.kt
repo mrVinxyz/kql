@@ -1,4 +1,14 @@
-package query.schema
+package schema
+
+import schema.ColumnType.BOOLEAN
+import schema.ColumnType.DATE_TEXT
+import schema.ColumnType.DATE_TIMESTAMP
+import schema.ColumnType.DECIMAL
+import schema.ColumnType.DOUBLE
+import schema.ColumnType.FLOAT
+import schema.ColumnType.INT
+import schema.ColumnType.LONG
+import schema.ColumnType.STRING
 
 /** The `ColumnType` represents the supported data types for database columns. */
 enum class ColumnType {
@@ -9,6 +19,8 @@ enum class ColumnType {
     DOUBLE,
     DECIMAL,
     BOOLEAN,
+    DATE_TEXT,
+    DATE_TIMESTAMP
 }
 
 /**
@@ -26,13 +38,15 @@ enum class ColumnType {
  */
 fun ColumnType.sqlTypeStr(): String {
     return when (this) {
-        ColumnType.STRING -> "TEXT"
-        ColumnType.INT -> "INTEGER"
-        ColumnType.LONG -> "INTEGER"
-        ColumnType.FLOAT -> "REAL"
-        ColumnType.DOUBLE -> "REAL"
-        ColumnType.DECIMAL -> "NUMERIC"
-        ColumnType.BOOLEAN -> "INTEGER"
+        STRING -> "TEXT"
+        INT -> "INTEGER"
+        LONG -> "INTEGER"
+        FLOAT -> "REAL"
+        DOUBLE -> "REAL"
+        DECIMAL -> "NUMERIC"
+        BOOLEAN -> "INTEGER"
+        DATE_TEXT -> "TEXT"
+        DATE_TIMESTAMP -> "INTEGER"
     }
 }
 
@@ -40,7 +54,7 @@ fun ColumnType.sqlTypeStr(): String {
  * The `Column` class represents a database column, which belongs to a specific table and has a data type.
  *
  * The class encapsulates the column's key (name), its type (as a [ColumnType]), and the table it belongs to.
- * The [ColumnType] determines the column's data type, which can be converted to a corresponding SQL type using the [toSqlType] function.
+ * The [ColumnType] determines the column's data type, which can be converted to a corresponding SQL type using the [sqlArgsType] function.
  *
  * @param key The name of the column in the table.
  * @param type The [ColumnType] of the column, representing the type of data it holds.
@@ -68,8 +82,8 @@ open class Column<T : Any>(
     /** Returns the [Table] to which this column belongs. */
     fun table(): Table = table
 
-    /** Returns the Column formatted with table name alias. */
-    fun withTableAlias(): Column<T> {
-        return Column(table.tableName.plus(".").plus(key), type, table)
+    /** Returns the Column key name formatted with table name alias. */
+    fun keyWithTableAlias(): String {
+        return table.alias().plus(".").plus(key)
     }
 }

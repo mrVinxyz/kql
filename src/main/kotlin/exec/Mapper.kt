@@ -1,7 +1,7 @@
-package query
+package exec
 
-import query.schema.Column
-import query.schema.ColumnType
+import schema.Column
+import schema.ColumnType
 import java.math.BigDecimal
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -66,6 +66,8 @@ class Row(val resultSet: ResultSet) {
             }
 
             ColumnType.BOOLEAN -> resultSet.getBoolean(column.key()) as T
+            ColumnType.DATE_TEXT -> resultSet.getString(column.key()) as T
+            ColumnType.DATE_TIMESTAMP -> resultSet.getString(column.key()) as T
         }
 
     /**
@@ -87,10 +89,9 @@ class Row(val resultSet: ResultSet) {
      */
     inline operator fun <reified T : Any> get(arg: Any): T =
         when (T::class) {
-            /// For Matching value, handle both column index (Int) and column name (String)
             String::class -> when (arg) {
-                is Int -> resultSet.getString(arg) ?: "" /// Value by index
-                is String -> resultSet.getString(arg) ?: "" /// Value by column name
+                is Int -> resultSet.getString(arg) ?: ""
+                is String -> resultSet.getString(arg) ?: ""
                 else -> error("Invalid type: $arg")
             } as T
 
