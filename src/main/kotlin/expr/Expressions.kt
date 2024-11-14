@@ -233,10 +233,9 @@ data class TableJoinExpr(
     }
 
     override fun columnsSql(useTableAlias: Boolean): List<String> {
-        println(table.tableName)
         return columns.map { column ->
             if (useTableAlias) {
-                "${table.alias()}.${column.key()}"
+                "${column.table().alias()}.${column.key()}"
             } else {
                 column.key()
             }
