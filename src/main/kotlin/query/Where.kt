@@ -14,6 +14,12 @@ class Where(private val blockOperator: String = "AND") {
     private var expression: WhereExpression? = null
     private val expressions = mutableListOf<WhereExpression>()
 
+    companion object {
+        operator fun invoke(init: Where.() -> Unit): Where {
+            return Where().apply(init)
+        }
+    }
+
     private fun addExpression(expr: WhereExpression) {
         expressions.add(expr)
         expression = when (expressions.size) {
