@@ -55,12 +55,20 @@ data class LogicalExpr(
         val sql = StringBuilder()
         val args = mutableListOf<Any?>()
 
-        fragments.forEachIndexed { index, fragment ->
-            if (index > 0) {
-                sql.append(" $operator ")
+        when (operator) {
+            "NOT" -> {
+                sql.append("NOT (")
+                sql.append(fragments[0].sql)
+                sql.append(")")
+                args.addAll(fragments[0].args)
             }
-            sql.append(fragment.sql)
-            args.addAll(fragment.args)
+            else -> {
+                fragments.forEachIndexed { index, fragment ->
+                    if (index > 0) sql.append(" $operator ")
+                    sql.append(fragment.sql)
+                    args.addAll(fragment.args)
+                }
+            }
         }
 
         return SqlFragment(sql.toString(), args)

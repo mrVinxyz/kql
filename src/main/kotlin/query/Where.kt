@@ -25,14 +25,21 @@ class Where(private val blockOperator: String = "AND") {
     fun or(init: Where.() -> Unit) {
         val subWhere = Where("OR").apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(subExpr)
+            addExpression(LogicalExpr("OR", listOf(subExpr)))
         }
     }
 
     fun and(init: Where.() -> Unit) {
         val subWhere = Where("AND").apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(subExpr)
+            addExpression(LogicalExpr("AND", listOf(subExpr)))
+        }
+    }
+
+    fun not(init: Where.() -> Unit) {
+        val subWhere = Where("NOT").apply(init)
+        subWhere.expression?.let { subExpr ->
+            addExpression(LogicalExpr("NOT", listOf(subExpr)))
         }
     }
 
@@ -69,13 +76,6 @@ class Where(private val blockOperator: String = "AND") {
     infix fun <T : Comparable<T>> Column<T>.gte(value: T?) {
         value?.let {
             addExpression(ComparisonExpr(this, ">=", it))
-        }
-    }
-
-    fun not(init: Where.() -> Unit) {
-        val subWhere = Where("NOT").apply(init)
-        subWhere.expression?.let { subExpr ->
-            addExpression(subExpr)
         }
     }
 
