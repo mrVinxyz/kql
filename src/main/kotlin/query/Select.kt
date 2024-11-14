@@ -109,26 +109,28 @@ class Select(private val table: Table) {
     }
 
     fun sqlArgs(): Query {
+        val args = mutableListOf<Any?>()
         val sql = StringBuilder().apply {
-            if (selectExpr is ColumnsSelectExpr) {
-                append("SELECT ")
-                val mainTableColumns = selectColumns.map { column ->
-                    "${table.alias()}.${column.key()}"
+
+            if (selectExpr is CountSelectExpr) {
+                append("SELECT COUNT(*) FROM ")
+                append(table.tableName)
+                append(" ")
+                append(table.alias())
+            } else {
+                if (selectExpr is ColumnsSelectExpr) {
+                    append("SELECT ")
+                    val mainTableColumns = selectColumns.map { column ->
+                        "${table.alias()}.${column.key()}"
+                    }
+
+                    val joinedColumns = joinExpressions.flatMap { it.columnsSql(true) }
+                    append((mainTableColumns + joinedColumns).joinToString(", "))
+                } else {
+                    append(selectExpr.sqlArgs(true).sql)
                 }
 
-                val joinedColumns = joinExpressions.flatMap { it.columnsSql(true) }
-                append((mainTableColumns + joinedColumns).joinToString(", "))
-            } else {
-                append(selectExpr.sqlArgs(true).sql)
-            }
-
-            append(" FROM ")
-
-            if (
-                selectExpr !is CountSelectExpr ||
-                joinExpressions.isNotEmpty() ||
-                whereClause != null
-            ) {
+                append(" FROM ")
                 append(table.tableName)
                 append(" ")
                 append(table.alias())
@@ -143,12 +145,10 @@ class Select(private val table: Table) {
             whereClause?.buildWhere(true)?.let { fragment ->
                 append(" WHERE ")
                 append(fragment.sql)
+                args.addAll(fragment.args)
             }
 
-            if (
-                selectExpr !is CountSelectExpr &&
-                selectExpr !is ExistsSelectExpr
-            ) {
+            if (!selectExpr.let { it is CountSelectExpr || it is ExistsSelectExpr }) {
                 orderByExpr?.sqlArgs(true)?.let { fragment ->
                     append(" ORDER BY ")
                     append(fragment.sql)
@@ -157,24 +157,19 @@ class Select(private val table: Table) {
                 limitExpr?.sqlArgs(true)?.let { fragment ->
                     append(" ")
                     append(fragment.sql)
+                    args.addAll(fragment.args)
                 }
 
                 offsetExpr?.sqlArgs(true)?.let { fragment ->
                     append(" ")
                     append(fragment.sql)
+                    args.addAll(fragment.args)
                 }
             }
 
             if (selectExpr is ExistsSelectExpr) {
                 append(")")
             }
-        }
-
-        val args = mutableListOf<Any?>()
-        whereClause?.buildWhere(true)?.let { args.addAll(it.args) }
-        if (selectExpr !is CountSelectExpr && selectExpr !is ExistsSelectExpr) {
-            limitExpr?.sqlArgs(true)?.let { args.addAll(it.args) }
-            offsetExpr?.sqlArgs(true)?.let { args.addAll(it.args) }
         }
 
         return Query(sql.toString(), args)
