@@ -68,9 +68,7 @@ class Select(private val table: Table) {
     }
 
     fun join(vararg columns: Column<*>, init: Join.() -> Unit): Select {
-        val builder = Join(table, columns.toList())
-        builder.init()
-        builder.build()?.let { join ->
+        Join(*columns, block = init)?.let { join ->
             joinExpressions.add(join)
         }
         return this

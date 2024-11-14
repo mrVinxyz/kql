@@ -10,10 +10,15 @@ import expr.JoinType.OUTER
 import expr.JoinType.RIGHT
 import expr.TableJoinExpr
 import schema.Column
-import schema.Table
 
-class Join(private val mainTable: Table, private val columns: List<Column<*>>) {
+class Join private constructor(private val columns: Array<out Column<*>>) {
     private var currentJoin: JoinExpression? = null
+
+    companion object {
+        operator fun invoke(vararg columns: Column<*>, block: Join.() -> Unit): JoinExpression? {
+            return Join(columns).apply(block).build()
+        }
+    }
 
     operator fun invoke(block: Join.() -> Unit): JoinExpression? {
         block()
@@ -36,17 +41,11 @@ class Join(private val mainTable: Table, private val columns: List<Column<*>>) {
         createJoin(this, other, FULL)
 
     private fun createJoin(left: Column<*>, right: Column<*>, type: JoinType) {
-        val (leftCol, rightCol) = if (left.table() == mainTable) {
-            left to right
-        } else {
-            right to left
-        }
-
         currentJoin = TableJoinExpr(
-            table = rightCol.table(),
-            columns = columns,
+            table = right.table(),
+            columns = columns.toList(),
             type = type,
-            condition = JoinCondition(leftCol, rightCol)
+            condition = JoinCondition(left, right)
         )
     }
 
