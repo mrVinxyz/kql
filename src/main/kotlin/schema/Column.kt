@@ -1,15 +1,5 @@
 package schema
 
-import schema.ColumnType.BOOLEAN
-import schema.ColumnType.DATE_TEXT
-import schema.ColumnType.DATE_TIMESTAMP
-import schema.ColumnType.DECIMAL
-import schema.ColumnType.DOUBLE
-import schema.ColumnType.FLOAT
-import schema.ColumnType.INT
-import schema.ColumnType.LONG
-import schema.ColumnType.STRING
-
 /** The `ColumnType` represents the supported data types for database columns. */
 enum class ColumnType {
     STRING,
@@ -38,15 +28,15 @@ enum class ColumnType {
  */
 fun ColumnType.sqlTypeStr(): String {
     return when (this) {
-        STRING -> "TEXT"
-        INT -> "INTEGER"
-        LONG -> "INTEGER"
-        FLOAT -> "REAL"
-        DOUBLE -> "REAL"
-        DECIMAL -> "NUMERIC"
-        BOOLEAN -> "INTEGER"
-        DATE_TEXT -> "TEXT"
-        DATE_TIMESTAMP -> "INTEGER"
+        ColumnType.STRING -> "TEXT"
+        ColumnType.INT -> "INTEGER"
+        ColumnType.LONG -> "INTEGER"
+        ColumnType.FLOAT -> "REAL"
+        ColumnType.DOUBLE -> "REAL"
+        ColumnType.DECIMAL -> "NUMERIC"
+        ColumnType.BOOLEAN -> "INTEGER"
+        ColumnType. DATE_TEXT -> "TEXT"
+        ColumnType.DATE_TIMESTAMP -> "INTEGER"
     }
 }
 
