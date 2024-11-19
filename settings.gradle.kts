@@ -1,1 +1,1 @@
-rootProject.name = "kt-query"
+rootProject.name = "kql"
