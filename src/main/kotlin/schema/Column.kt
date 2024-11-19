@@ -71,9 +71,4 @@ open class Column<T : Any>(
 
     /** Returns the [Table] to which this column belongs. */
     fun table(): Table = table
-
-    /** Returns the Column key name formatted with table name alias. */
-    fun keyWithTableAlias(): String {
-        return table.alias().plus(".").plus(key)
-    }
 }
