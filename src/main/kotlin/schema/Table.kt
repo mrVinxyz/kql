@@ -1,5 +1,7 @@
 package schema
 
+import dialect.SQLiteDialect
+import expr.SqlRenderer
 import query.Query
 import java.math.BigDecimal
 import schema.ColumnType.BOOLEAN
@@ -19,6 +21,7 @@ import schema.ColumnType.STRING
  */
 abstract class Table(
     val tableName: String,
+    val dialect: SqlRenderer,
     protected val usePrefix: Boolean = false,
     private val useAlias: String? = null
 ) {
@@ -92,6 +95,17 @@ abstract class Table(
     fun alias(): String = useAlias ?: tableName.split("_").map { it.first() }.joinToString("")
 }
 
+abstract class LiteTable(
+    tableName: String,
+    usePrefix: Boolean = false,
+    useAlias: String? = null
+) : Table(
+    tableName = tableName,
+    dialect = SQLiteDialect(),
+    usePrefix = usePrefix,
+    useAlias = useAlias
+)
+
 /**
  * Generates an SQL `CREATE TABLE` query for the current table, based on its defined columns.
  *
@@ -128,4 +142,3 @@ fun Table.createTable(): Query {
 
     return Query(sql.toString())
 }
-

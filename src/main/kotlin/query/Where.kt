@@ -2,6 +2,7 @@ package query
 
 import expr.BetweenExpr
 import expr.ComparisonExpr
+import expr.ComparisonOperator
 import expr.ExistsExpr
 import expr.GroupExpr
 import expr.InListExpr
@@ -9,14 +10,16 @@ import expr.LogicalExpr
 import expr.SqlFragment
 import expr.WhereExpression
 import schema.Column
+import schema.Table
 
-class Where(private val blockOperator: String = "AND") {
-    private var expression: WhereExpression? = null
+class Where(private val table: Table, private val blockOperator: String = "AND") {
+    var expression: WhereExpression? = null
+        private set
     private val expressions = mutableListOf<WhereExpression>()
 
     companion object {
-        operator fun invoke(init: Where.() -> Unit): Where {
-            return Where().apply(init)
+        operator fun invoke(table: Table, init: Where.() -> Unit): Where {
+            return Where(table).apply(init)
         }
     }
 
@@ -29,65 +32,65 @@ class Where(private val blockOperator: String = "AND") {
     }
 
     fun or(init: Where.() -> Unit) {
-        val subWhere = Where("OR").apply(init)
+        val subWhere = Where(table, "OR").apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(LogicalExpr("OR", listOf(subExpr)))
+            addExpression(subExpr)
         }
     }
 
     fun and(init: Where.() -> Unit) {
-        val subWhere = Where("AND").apply(init)
+        val subWhere = Where(table, "AND").apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(LogicalExpr("AND", listOf(subExpr)))
-        }
-    }
-
-    fun not(init: Where.() -> Unit) {
-        val subWhere = Where("NOT").apply(init)
-        subWhere.expression?.let { subExpr ->
-            addExpression(LogicalExpr("NOT", listOf(subExpr)))
+            addExpression(subExpr)
         }
     }
 
     infix fun <T : Any> Column<T>.eq(value: T?) {
         value?.let {
-            addExpression(ComparisonExpr(this, "=", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.EQUALS, it))
         }
     }
 
     infix fun <T : Any> Column<T>.neq(value: T?) {
         value?.let {
-            addExpression(ComparisonExpr(this, "<>", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.NOT_EQUALS, it))
         }
     }
 
     infix fun <T : Comparable<T>> Column<T>.lt(value: T?) {
         value?.let {
-            addExpression(ComparisonExpr(this, "<", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.LESS_THAN, it))
         }
     }
 
     infix fun <T : Comparable<T>> Column<T>.lte(value: T?) {
         value?.let {
-            addExpression(ComparisonExpr(this, "<=", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.LESS_THAN_OR_EQUAL, it))
         }
     }
 
     infix fun <T : Comparable<T>> Column<T>.gt(value: T?) {
         value?.let {
-            addExpression(ComparisonExpr(this, ">", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.GREATER_THAN, it))
         }
     }
 
     infix fun <T : Comparable<T>> Column<T>.gte(value: T?) {
         value?.let {
-            addExpression(ComparisonExpr(this, ">=", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.GREATER_THAN_OR_EQUAL, it))
+        }
+    }
+
+    fun not(init: Where.() -> Unit) {
+        val subWhere = Where(table).apply(init)
+        subWhere.expression?.let { subExpr ->
+            addExpression(LogicalExpr("NOT", listOf(subExpr)))
         }
     }
 
     infix fun <T : Any> Column<T>.inList(values: List<T>?) {
         values?.takeIf { it.isNotEmpty() }?.let {
-            addExpression(InListExpr(this, it))
+            addExpression(InListExpr(this, it, false))
         }
     }
 
@@ -106,67 +109,82 @@ class Where(private val blockOperator: String = "AND") {
     }
 
     fun <T : Any> Column<T>.isNull() {
-        addExpression(ComparisonExpr(this, "IS NULL", null))
+        addExpression(ComparisonExpr(this, ComparisonOperator.IS_NULL, null))
     }
 
     fun <T : Any> Column<T>.isNotNull() {
-        addExpression(ComparisonExpr(this, "IS NOT NULL", null))
+        addExpression(ComparisonExpr(this, ComparisonOperator.IS_NOT_NULL, null))
     }
 
     infix fun Column<String>.like(pattern: String?) {
         pattern?.let {
-            addExpression(ComparisonExpr(this, "LIKE", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.LIKE, it))
         }
     }
 
     infix fun Column<String>.likeContains(pattern: String?) {
         pattern?.let {
-            addExpression(ComparisonExpr(this, "LIKE", "%$it%"))
+            addExpression(ComparisonExpr(this, ComparisonOperator.LIKE, "%$it%"))
         }
     }
 
     infix fun Column<String>.likeStarts(pattern: String?) {
         pattern?.let {
-            addExpression(ComparisonExpr(this, "LIKE", "$it%"))
+            addExpression(ComparisonExpr(this, ComparisonOperator.LIKE, "$it%"))
         }
     }
 
     infix fun Column<String>.likeEnds(pattern: String?) {
         pattern?.let {
-            addExpression(ComparisonExpr(this, "LIKE", "%$it"))
+            addExpression(ComparisonExpr(this, ComparisonOperator.LIKE, "%$it"))
         }
     }
 
     infix fun Column<String>.ilike(pattern: String?) {
         pattern?.let {
-            addExpression(ComparisonExpr(this, "ILIKE", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.ILIKE, it))
         }
     }
 
     infix fun Column<String>.notLike(pattern: String?) {
         pattern?.let {
-            addExpression(ComparisonExpr(this, "NOT LIKE", it))
+            addExpression(ComparisonExpr(this, ComparisonOperator.NOT_LIKE, it))
         }
     }
 
     fun group(init: Where.() -> Unit) {
-        val subWhere = Where(blockOperator).apply(init)
+        val subWhere = Where(table, blockOperator).apply(init)
         subWhere.expression?.let { subExpr ->
             addExpression(GroupExpr(subExpr))
         }
     }
 
-    fun exists(subquery: String, args: List<Any> = emptyList()) {
-        addExpression(ExistsExpr(subquery, args))
-    }
-
-    fun notExists(subquery: String, args: List<Any> = emptyList()) {
-        addExpression(ExistsExpr(subquery, args, true))
-    }
-
-    fun buildWhere(useTableAlias: Boolean = false): SqlFragment? {
-        return expression?.sqlArgs(useTableAlias)?.let { fragment ->
-            SqlFragment(fragment.sql, fragment.args)
+    fun withOr(init: Where.() -> Unit) {
+        val subWhere = Where(table, "OR").apply(init)
+        subWhere.expression?.let { subExpr ->
+            addExpression(GroupExpr(subExpr))
         }
     }
+
+    fun withAnd(init: Where.() -> Unit) {
+        val subWhere = Where(table, "AND").apply(init)
+        subWhere.expression?.let { subExpr ->
+            addExpression(GroupExpr(subExpr))
+        }
+    }
+
+    // TODO - add correlated subqueries support
+//    fun exists(block: Select.() -> Unit) {
+//        val select = Select(table)
+//        select.block()
+//        val query = select.sqlArgs()
+//        addExpression(ExistsExpr(query.sql, query.args, false))
+//    }
+//
+//    fun notExists(block: Select.() -> Unit) {
+//        val select = Select(table)
+//        select.block()
+//        val query = select.sqlArgs()
+//        addExpression(ExistsExpr(query.sql, query.args, true))
+//    }
 }

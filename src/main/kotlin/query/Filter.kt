@@ -60,7 +60,7 @@ class InsertFilter(table: Table) : BaseFilter(table) {
             val column = this
             filterFunctions.add { conn ->
                 val select = Select(table)
-                    .exists { column eq it }
+                    .exists { where { column eq it } }
 
                 checkExists(conn, select, true, msg, key())
             }
@@ -74,8 +74,10 @@ class InsertFilter(table: Table) : BaseFilter(table) {
         filterFunctions.add { conn ->
             val select = Select(table)
                 .exists {
-                    columns.forEach { (column, value) ->
-                        column eq value
+                    where {
+                        columns.forEach { (column, value) ->
+                            column eq value
+                        }
                     }
                 }
 
@@ -97,7 +99,7 @@ class InsertFilter(table: Table) : BaseFilter(table) {
     ) {
         filterFunctions.add { conn ->
             val select = Select(foreignTable)
-                .exists { foreignColumn eq value }
+                .exists { where { foreignColumn eq value } }
 
             checkExists(conn, select, false, msg, key())
         }
@@ -115,8 +117,10 @@ class UpdateFilter(table: Table) : BaseFilter(table) {
             filterFunctions.add { conn ->
                 val select = Select(table)
                     .exists {
-                        column eq it
-                        table.primaryKey<Any>() neq pk
+                        where {
+                            column eq it
+                            table.primaryKey<Any>() neq pk
+                        }
                     }
 
                 checkExists(conn, select, true, msg, key())
@@ -132,9 +136,11 @@ class UpdateFilter(table: Table) : BaseFilter(table) {
         filterFunctions.add { conn ->
             val select = Select(table)
                 .exists {
-                    columns.forEach { (column, value) ->
-                        column eq value
-                        table.primaryKey<Any>() neq pk
+                    where {
+                        columns.forEach { (column, value) ->
+                            column eq value
+                            table.primaryKey<Any>() neq pk
+                        }
                     }
                 }
 
@@ -158,8 +164,10 @@ class UpdateFilter(table: Table) : BaseFilter(table) {
         filterFunctions.add { conn ->
             val select = Select(foreignTable)
                 .exists {
-                    foreignColumn eq value
-                    table.primaryKey<Any>() neq pk
+                    where {
+                        foreignColumn eq value
+                        table.primaryKey<Any>() neq pk
+                    }
                 }
 
             checkExists(conn, select, false, msg, key())

@@ -31,18 +31,8 @@ class Insert(private val table: Table) {
 
     fun sqlArgs(): Query {
         require(assignments.isNotEmpty()) { "No columns specified for insert" }
-
-        val sql = StringBuilder().apply {
-            append("INSERT INTO ")
-            append(table.tableName)
-
-            val expr = InsertValuesExpr(assignments)
-            val fragment = expr.sqlArgs(false)
-            append(" ")
-            append(fragment.sql)
-        }
-
-        return Query(sql.toString(), InsertValuesExpr(assignments).sqlArgs(false).args)
+        val fragment = InsertValuesExpr(assignments, table).accept(table.dialect, false)
+        return Query(fragment.sql, fragment.args)
     }
 }
 

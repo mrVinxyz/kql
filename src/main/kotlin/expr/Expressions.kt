@@ -3,253 +3,180 @@ package expr
 import schema.Column
 import schema.Table
 
-sealed interface InsertExpression : Expression
-
 data class InsertValuesExpr(
-    private val assignments: List<ColumnAssignment>
-) : InsertExpression {
-    data class ColumnAssignment(val column: Column<*>, val value: Any)
+    val assignments: List<ColumnAssignment>,
+    val table: Table = assignments.first().column.table()
+) : SqlExpression {
+    data class ColumnAssignment(
+        val column: Column<*>,
+        val value: Any?
+    )
 
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val columnsSql = assignments.joinToString(", ") { it.column.key() }
-        val placeholders = assignments.joinToString(", ") { "?" }
-        return SqlFragment("($columnsSql) VALUES ($placeholders)", assignments.map { it.value })
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderInsert(this, useTableAlias)
+}
+
+
+data class SelectQueryExpr(
+    val table: Table,
+    val selectExpr: SelectClauseExpression,
+    val joinExpressions: List<JoinExpression> = emptyList(),
+    val condition: WhereExpression? = null,
+    val orderByExpr: OrderByExpr? = null,
+    val limitExpr: LimitExpr? = null,
+    val offsetExpr: OffsetExpr? = null,
+) : SqlExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderSelect(this, useTableAlias)
+}
+
+sealed interface SelectClauseExpression : SqlExpression
+
+class SelectOneExpr : SelectClauseExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment {
+        return renderer.renderSelectOne(this, useTableAlias)
     }
 }
 
-sealed interface DeleteExpression : Expression
+data class ColumnsSelectExpr(
+    val columns: List<Column<*>>
+) : SelectClauseExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderColumnsSelect(this, useTableAlias)
+}
 
-data class DeleteExpr(private val table: Table) : DeleteExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        return SqlFragment("DELETE FROM ${table.tableName}")
+class CountSelectExpr : SelectClauseExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderCountSelect(this, useTableAlias)
+}
+
+class ExistsSelectExpr(
+    val subquery: () -> SqlFragment
+) : SelectClauseExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment {
+        return subquery()
     }
 }
 
-sealed interface WhereExpression : Expression
+sealed interface WhereExpression : SqlExpression
 
 data class ComparisonExpr<T : Any>(
-    private val column: Column<T>,
-    private val operator: String,
-    private val value: T?
+    val column: Column<T>,
+    val operator: ComparisonOperator,
+    val value: T?
 ) : WhereExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val columnRef = if (useTableAlias) {
-            "${column.table().alias()}.${column.key()}"
-        } else {
-            column.key()
-        }
-
-        return when (value) {
-            null -> SqlFragment("$columnRef $operator")
-            else -> SqlFragment("$columnRef $operator ?", listOf(value))
-        }
-    }
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderComparison(this, useTableAlias)
 }
 
 data class LogicalExpr(
-    private val operator: String,
-    private val expressions: List<WhereExpression>
+    val operator: String,
+    val expressions: List<WhereExpression>
 ) : WhereExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val fragments = expressions.map { it.sqlArgs(useTableAlias) }
-        val sql = StringBuilder()
-        val args = mutableListOf<Any?>()
-
-        when (operator) {
-            "NOT" -> {
-                sql.append("NOT (")
-                sql.append(fragments[0].sql)
-                sql.append(")")
-                args.addAll(fragments[0].args)
-            }
-            else -> {
-                fragments.forEachIndexed { index, fragment ->
-                    if (index > 0) sql.append(" $operator ")
-                    sql.append(fragment.sql)
-                    args.addAll(fragment.args)
-                }
-            }
-        }
-
-        return SqlFragment(sql.toString(), args)
-    }
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderLogical(this, useTableAlias)
 }
 
 data class InListExpr<T : Any>(
-    private val column: Column<T>,
-    private val values: List<T>,
-    private val isNegated: Boolean = false
+    val column: Column<T>,
+    val values: List<T>,
+    val isNegated: Boolean = false
 ) : WhereExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val columnRef = if (useTableAlias) {
-            "${column.table().alias()}.${column.key()}"
-        } else {
-            column.key()
-        }
-
-        val operator = if (isNegated) "NOT IN" else "IN"
-        val placeholders = values.joinToString(", ") { "?" }
-        return SqlFragment(
-            "$columnRef $operator ($placeholders)",
-            values
-        )
-    }
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderInList(this, useTableAlias)
 }
 
 data class BetweenExpr<T : Comparable<T>>(
-    private val column: Column<T>,
-    private val range: Pair<T, T>
+    val column: Column<T>,
+    val range: Pair<T, T>
 ) : WhereExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val columnRef = if (useTableAlias) {
-            "${column.table().alias()}.${column.key()}"
-        } else {
-            column.key()
-        }
-
-        return SqlFragment(
-            "$columnRef BETWEEN ? AND ?",
-            listOf(range.first, range.second)
-        )
-    }
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderBetween(this, useTableAlias)
 }
 
 data class ExistsExpr<T : Any>(
-    private val subquery: String,
-    private val args: List<T>,
-    private val isNegated: Boolean = false
+    val subquery: String,
+    val args: List<T?>,
+    val isNegated: Boolean = false
 ) : WhereExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val operator = if (isNegated) "NOT EXISTS" else "EXISTS"
-        return SqlFragment("$operator ($subquery)", args)
-    }
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderExists(this, useTableAlias)
 }
 
 data class GroupExpr(
-    private val expression: WhereExpression
+    val expression: WhereExpression
 ) : WhereExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val fragment = expression.sqlArgs(useTableAlias)
-        return SqlFragment("(${fragment.sql})", fragment.args)
-    }
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderGroup(this, useTableAlias)
 }
 
-sealed interface UpdateExpression : Expression
-
-data class SetExpr(private val assignments: List<Assignment>) : UpdateExpression {
-    data class Assignment(val column: Column<*>, val value: Any?)
-
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val sql = assignments.joinToString(", ") { assignment ->
-            val columnRef = assignment.column.key()
-
-            if (assignment.value == null) {
-                "$columnRef = COALESCE(?, $columnRef)"
-            } else {
-                "$columnRef = ?"
-            }
-        }
-        return SqlFragment(sql, assignments.map { it.value })
-    }
+enum class ComparisonOperator(val sql: String) {
+    EQUALS("="),
+    NOT_EQUALS("<>"),
+    LESS_THAN("<"),
+    LESS_THAN_OR_EQUAL("<="),
+    GREATER_THAN(">"),
+    GREATER_THAN_OR_EQUAL(">="),
+    IS_NULL("IS NULL"),
+    IS_NOT_NULL("IS NOT NULL"),
+    LIKE("LIKE"),
+    ILIKE("ILIKE"),
+    NOT_LIKE("NOT LIKE")
 }
 
-sealed interface LimitOffsetExpression : Expression
+sealed interface UpdateSetExpression : SqlExpression
 
-data class LimitExpr(private val limit: Int) : LimitOffsetExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        return SqlFragment("LIMIT ?", listOf(limit))
-    }
+data class UpdateQueryExpression(
+    val table: Table,
+    val setExpr: UpdateSetExpression,
+    val condition: WhereExpression? = null
+) : SqlExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderUpdate(this, useTableAlias)
 }
 
-data class OffsetExpr(private val offset: Int) : LimitOffsetExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        return SqlFragment("OFFSET ?", listOf(offset))
-    }
+data class SetExpr(
+    val assignments: List<Assignment>
+) : UpdateSetExpression {
+    data class Assignment(
+        val column: Column<*>,
+        val value: Any?
+    )
+
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderSet(this, useTableAlias)
 }
 
-sealed interface OrderByExpression : Expression
-
-data class OrderByExpr(private val columns: List<Pair<Column<*>, OrderDirection>>) : OrderByExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val orderSql = columns.joinToString(", ") { (column, direction) ->
-            if (useTableAlias) {
-                "${column.table().alias()}.${column.key()} ${direction.sql}"
-            } else {
-                "${column.key()} ${direction.sql}"
-            }
-        }
-        return SqlFragment(orderSql)
-    }
+sealed interface JoinExpression : SqlExpression {
+    val context: JoinContext?
 }
 
-sealed class OrderDirection(val sql: String) {
-    data object ASC : OrderDirection("ASC")
-    data object DESC : OrderDirection("DESC")
+interface JoinContext {
+    val tableAliases: MutableMap<Table, String>
 
-    companion object {
-        fun fromString(value: String?): OrderDirection = when (value?.uppercase()) {
-            "DESC" -> DESC
-            else -> ASC
+    fun addTable(table: Table) {
+        if (!tableAliases.containsKey(table)) {
+            tableAliases[table] = table.alias()
         }
     }
-}
-
-sealed interface SelectClauseExpression : Expression
-
-data class CountSelectExpr(private val isCount: Boolean = true) : SelectClauseExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        return SqlFragment("SELECT COUNT(*)")
-    }
-}
-
-data class ExistsSelectExpr(private val isExists: Boolean = true) : SelectClauseExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        return SqlFragment("SELECT EXISTS (SELECT 1")
-    }
-}
-
-data class ColumnsSelectExpr(private val columns: List<Column<*>>) : SelectClauseExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        return SqlFragment(columns.joinToString(", ") { it.keyWithTableAlias() })
-    }
-}
-
-sealed interface JoinExpression : Expression {
-    val table: Table
-    val columns: List<Column<*>>
-    fun columnsSql(useTableAlias: Boolean): List<String>
+    fun tableAlias(table: Table): String?
 }
 
 data class TableJoinExpr(
-    override val table: Table,
-    override val columns: List<Column<*>>,
-    private val type: JoinType,
-    private val condition: JoinCondition
+    val table: Table,
+    val columns: List<Column<*>>,
+    val type: JoinType,
+    val condition: JoinCondition,
+    override val context: JoinContext?
 ) : JoinExpression {
-    override fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        val tableRef = if (useTableAlias) {
-            "${table.tableName} ${table.alias()}"
-        } else {
-            table.tableName
-        }
-
-        val conditionFragment = condition.sqlArgs(useTableAlias)
-        return SqlFragment(
-            "${type.sql} JOIN $tableRef ON ${conditionFragment.sql}",
-            conditionFragment.args
-        )
-    }
-
-    override fun columnsSql(useTableAlias: Boolean): List<String> {
-        return columns.map { column ->
-            if (useTableAlias) {
-                "${column.table().alias()}.${column.key()}"
-            } else {
-                column.key()
-            }
-        }
-    }
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderJoin(this, useTableAlias)
 }
+
+data class JoinCondition(
+    val leftColumn: Column<*>,
+    val rightColumn: Column<*>
+)
 
 enum class JoinType(val sql: String) {
     LEFT("LEFT"),
@@ -259,20 +186,43 @@ enum class JoinType(val sql: String) {
     FULL("FULL")
 }
 
-data class JoinCondition(
-    val leftColumn: Column<*>,
-    val rightColumn: Column<*>
-) {
-    fun sqlArgs(useTableAlias: Boolean): SqlFragment {
-        return if (useTableAlias) {
-            SqlFragment(
-                "${leftColumn.table().alias()}.${leftColumn.key()} = " +
-                        "${rightColumn.table().alias()}.${rightColumn.key()}"
-            )
-        } else {
-            SqlFragment(
-                "${leftColumn.key()} = ${rightColumn.key()}"
-            )
-        }
-    }
+data class OrderByExpr(
+    val orders: List<OrderByColumn>
+) : SqlExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderOrderBy(this, useTableAlias)
+}
+
+data class OrderByColumn(
+    val column: Column<*>,
+    val direction: OrderDirection
+)
+
+enum class OrderDirection(val sql: String) {
+    ASC("ASC"),
+    DESC("DESC")
+}
+
+sealed interface LimitOffsetExpression : SqlExpression
+
+data class LimitExpr(
+    val limit: Int
+) : LimitOffsetExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderLimit(this, useTableAlias)
+}
+
+data class OffsetExpr(
+    val offset: Int
+) : LimitOffsetExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderOffset(this, useTableAlias)
+}
+
+data class DeleteQueryExpression(
+    val table: Table,
+    val condition: WhereExpression? = null
+) : SqlExpression {
+    override fun accept(renderer: SqlRenderer, useTableAlias: Boolean): SqlFragment =
+        renderer.renderDelete(this, useTableAlias)
 }

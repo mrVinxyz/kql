@@ -1,32 +1,39 @@
-import query.Executor
-import query.Row
-import query.exec
-import query.schema.Table
-import query.schema.createTable
-import java.math.BigDecimal
-import java.sql.Connection
+import dialect.SQLiteDialect
+import schema.Table
 
-class WizardsTable : Table("wizards") {
+object WizardsTable : Table("wizards", SQLiteDialect()) {
     val id = integer("id").setPrimaryKey()
     val name = text("name")
     val level = integer("level")
     val powerLevel = float("power_level")
-    val manaCapacity = double("mana_capacity")
-    val experiencePoints = double("experience_points")
+    val manaCapacity = float("mana_capacity")
+    val experiencePoints = float("experience_points")
+    val guild = text("guild")
+    val specialization = text("specialization")
+    val alignment = text("alignment")
+    val lastLogin = dateText("last_login")
 }
 
-class SpellsTable : Table("spells") {
+object SpellsTable : Table("spells", SQLiteDialect()) {
     val id = integer("id").setPrimaryKey()
     val name = text("name")
     val description = text("description")
-    val manaCost = double("mana_cost")
-    val castingTime = double("casting_time")
+    val manaCost = float("mana_cost")
+    val castingTime = float("casting_time")
     val damage = integer("damage")
     val isAoe = boolean("is_aoe")
-    val successRate = double("success_rate")
+    val successRate = float("success_rate")
+    val element = text("element")
+    val range = integer("range")
+    val cooldown = float("cooldown")
+    val tier = integer("tier")
+    val isBanned = boolean("is_banned")
 }
 
-class WizardSpellsTable : Table("wizard_spells") {
+object WizardSpellsTable : Table("wizard_spells", SQLiteDialect()) {
     val wizardId = integer("wizard_id")
     val spellId = integer("spell_id")
+    val proficiency = integer("proficiency")
+    val dateLearned = timestamp("date_learned")
+    val timesCasted = integer("times_casted")
 }

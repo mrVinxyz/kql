@@ -2,6 +2,7 @@ package query
 
 import expr.SetExpr
 import expr.SetExpr.Assignment
+import expr.UpdateQueryExpression
 import java.sql.Connection
 import schema.Column
 import schema.Table
@@ -30,12 +31,10 @@ class Update(private val table: Table) {
         return this
     }
 
-    fun updatePrimary(value: Any, init: (Update) -> Unit): Update {
+    fun updatePrimary(value: Any, init: Update.() -> Unit): Update {
         val primaryKey = table.primaryKey<Any>()
-        return update {
-            where { primaryKey eq value }
-            init(this)
-        }
+        where { primaryKey eq value }
+        return update(init)
     }
 
     operator fun <T : Any> set(column: Column<*>, value: T?): Update {
@@ -48,7 +47,7 @@ class Update(private val table: Table) {
     }
 
     fun where(init: Where.() -> Unit): Update {
-        val where = Where()
+        val where = Where(table)
         init(where)
         whereClause = where
         return this
@@ -61,28 +60,16 @@ class Update(private val table: Table) {
     }
 
     fun sqlArgs(): Query {
-        val setExpr = this.setExpr ?: SetExpr(assignments)
         require(assignments.isNotEmpty()) { "No columns specified for update" }
 
-        val sql = StringBuilder().apply {
-            append("UPDATE ")
-            append(table.tableName)
+        val expression = UpdateQueryExpression(
+            table = table,
+            setExpr = SetExpr(assignments),
+            condition = whereClause?.expression
+        )
 
-            append(" SET ")
-            val setFragment = setExpr.sqlArgs(false)
-            append(setFragment.sql)
-
-            whereClause?.buildWhere(false)?.let { fragment ->
-                append(" WHERE ")
-                append(fragment.sql)
-            }
-        }
-
-        val args = mutableListOf<Any?>()
-        args.addAll(setExpr.sqlArgs(false).args)
-        whereClause?.buildWhere(false)?.let { args.addAll(it.args) }
-
-        return Query(sql.toString(), args)
+        val fragment = expression.accept(table.dialect, false)
+        return Query(fragment.sql, fragment.args)
     }
 }
 

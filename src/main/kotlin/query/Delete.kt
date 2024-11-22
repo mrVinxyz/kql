@@ -1,6 +1,6 @@
 package query
 
-import expr.DeleteExpr
+import expr.DeleteQueryExpression
 import java.sql.Connection
 import schema.Table
 
@@ -8,7 +8,7 @@ class Delete(private val table: Table) {
     private var whereClause: Where? = null
 
     fun deleteWhere(init: Where.() -> Unit): Delete {
-        val where = Where()
+        val where = Where(table)
         init(where)
         whereClause = where
         return this
@@ -20,20 +20,12 @@ class Delete(private val table: Table) {
     }
 
     fun sqlArgs(): Query {
-        val sql = StringBuilder().apply {
-            val deleteFragment = DeleteExpr(table).sqlArgs(false)
-            append(deleteFragment.sql)
-
-            whereClause?.buildWhere(false)?.let { fragment ->
-                append(" WHERE ")
-                append(fragment.sql)
-            }
-        }
-
-        val args = mutableListOf<Any?>()
-        whereClause?.buildWhere(false)?.let { args.addAll(it.args) }
-
-        return Query(sql.toString(), args)
+        val deleteExpr = DeleteQueryExpression(
+            table = table,
+            condition = whereClause?.expression
+        )
+        val fragment = deleteExpr.accept(table.dialect, false)
+        return Query(fragment.sql, fragment.args)
     }
 }
 

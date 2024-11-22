@@ -7,10 +7,13 @@ import expr.ExistsSelectExpr
 import expr.JoinExpression
 import expr.LimitExpr
 import expr.OffsetExpr
+import expr.OrderByColumn
 import expr.OrderByExpr
-import expr.OrderByExpression
 import expr.OrderDirection
 import expr.SelectClauseExpression
+import expr.SelectOneExpr
+import expr.SelectQueryExpr
+import expr.SqlFragment
 import java.sql.Connection
 import schema.Column
 import schema.Table
@@ -19,22 +22,11 @@ class Select(private val table: Table) {
     private val selectColumns = mutableListOf<Column<*>>()
     private var whereClause: Where? = null
     private val joinExpressions = mutableListOf<JoinExpression>()
+    private var joinContext: TableJoinContext? = null
     private var limitExpr: LimitExpr? = null
     private var offsetExpr: OffsetExpr? = null
-    private var orderByExpr: OrderByExpression? = null
-    private var selectExpr: SelectClauseExpression = ColumnsSelectExpr(table.getColumnsList())
-
-    fun count(block: (Select.() -> Unit)? = null): Select {
-        selectExpr = CountSelectExpr()
-        block?.let { this.it() }
-        return this
-    }
-
-    fun exists(block: Where.() -> Unit): Select {
-        selectExpr = ExistsSelectExpr()
-        where(block)
-        return this
-    }
+    private var orderByExpr: OrderByExpr? = null
+    private var selectExpr: SelectClauseExpression = SelectOneExpr()
 
     fun select(vararg columns: Column<*>): Select {
         require(columns.isNotEmpty()) { "select columns can not be empty" }
@@ -60,7 +52,7 @@ class Select(private val table: Table) {
     }
 
     fun where(init: Where.() -> Unit): Select {
-        val newWhere = Where()
+        val newWhere = Where(table)
         init(newWhere)
 
         whereClause = newWhere
@@ -68,8 +60,12 @@ class Select(private val table: Table) {
     }
 
     fun join(vararg columns: Column<*>, init: Join.() -> Unit): Select {
-        Join(*columns, block = init)?.let { join ->
-            joinExpressions.add(join)
+        if (joinContext == null) joinContext = TableJoinContext()
+
+        Join(table, joinContext, *columns, block = init)?.let { join ->
+            val joinClause = join.currentJoin
+            require(joinClause != null) { "Join clause cannot be empty" }
+            joinExpressions.add(joinClause)
         }
         return this
     }
@@ -90,7 +86,7 @@ class Select(private val table: Table) {
         return this
     }
 
-    fun pagination(page: Int?, size: Int?): Select {
+    fun paginate(page: Int?, size: Int?): Select {
         if (page != null && size != null) {
             require(page > 0) { "Page must be greater than 0" }
             require(size > 0) { "Page size must be greater than 0" }
@@ -102,75 +98,39 @@ class Select(private val table: Table) {
     }
 
     fun orderBy(vararg orders: Pair<Column<*>, OrderDirection>): Select {
-        orderByExpr = OrderByExpr(orders.toList())
+        orderByExpr = OrderByExpr(orders.map { OrderByColumn(it.first, it.second) })
+        return this
+    }
+
+    fun count(block: (Select.() -> Unit)? = null): Select {
+        selectExpr = CountSelectExpr()
+        block?.let { this.it() }
+        return this
+    }
+
+    fun exists(block: Select.() -> Unit): Select {
+        val subquery = Select(table)
+        block(subquery)
+        selectExpr = ExistsSelectExpr {
+            val query = subquery.sqlArgs()
+            SqlFragment(query.sql, query.args)
+        }
         return this
     }
 
     fun sqlArgs(): Query {
-        val args = mutableListOf<Any?>()
-        val sql = StringBuilder().apply {
+        val expression = SelectQueryExpr(
+            table = table,
+            selectExpr = selectExpr,
+            joinExpressions = joinExpressions,
+            condition = whereClause?.expression,
+            orderByExpr = orderByExpr,
+            limitExpr = limitExpr,
+            offsetExpr = offsetExpr
+        )
 
-            if (selectExpr is CountSelectExpr) {
-                append("SELECT COUNT(*) FROM ")
-                append(table.tableName)
-                append(" ")
-                append(table.alias())
-            } else {
-                if (selectExpr is ColumnsSelectExpr) {
-                    append("SELECT ")
-                    val mainTableColumns = selectColumns.map { column ->
-                        "${table.alias()}.${column.key()}"
-                    }
-
-                    val joinedColumns = joinExpressions.flatMap { it.columnsSql(true) }
-                    append((mainTableColumns + joinedColumns).joinToString(", "))
-                } else {
-                    append(selectExpr.sqlArgs(true).sql)
-                }
-
-                append(" FROM ")
-                append(table.tableName)
-                append(" ")
-                append(table.alias())
-            }
-
-            joinExpressions.forEach { expr ->
-                append(" ")
-                val fragment = expr.sqlArgs(true)
-                append(fragment.sql)
-            }
-
-            whereClause?.buildWhere(true)?.let { fragment ->
-                append(" WHERE ")
-                append(fragment.sql)
-                args.addAll(fragment.args)
-            }
-
-            if (!selectExpr.let { it is CountSelectExpr || it is ExistsSelectExpr }) {
-                orderByExpr?.sqlArgs(true)?.let { fragment ->
-                    append(" ORDER BY ")
-                    append(fragment.sql)
-                }
-
-                limitExpr?.sqlArgs(true)?.let { fragment ->
-                    append(" ")
-                    append(fragment.sql)
-                    args.addAll(fragment.args)
-                }
-
-                offsetExpr?.sqlArgs(true)?.let { fragment ->
-                    append(" ")
-                    append(fragment.sql)
-                    args.addAll(fragment.args)
-                }
-            }
-
-            if (selectExpr is ExistsSelectExpr) {
-                append(")")
-            }
-        }
-
-        return Query(sql.toString(), args)
+        val fragment = expression.accept(table.dialect, true)
+        return Query(fragment.sql, fragment.args)
     }
 }
 

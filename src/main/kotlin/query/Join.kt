@@ -1,6 +1,7 @@
 package query
 
 import expr.JoinCondition
+import expr.JoinContext
 import expr.JoinExpression
 import expr.JoinType
 import expr.JoinType.FULL
@@ -10,19 +11,60 @@ import expr.JoinType.OUTER
 import expr.JoinType.RIGHT
 import expr.TableJoinExpr
 import schema.Column
+import schema.Table
 
-class Join private constructor(private val columns: Array<out Column<*>>) {
-    private var currentJoin: JoinExpression? = null
+class TableJoinContext : JoinContext {
+    override val tableAliases = mutableMapOf<Table, String>()
 
-    companion object {
-        operator fun invoke(vararg columns: Column<*>, block: Join.() -> Unit): JoinExpression? {
-            return Join(columns).apply(block).build()
+    override fun addTable(table: Table) {
+        if (!tableAliases.containsKey(table)) {
+            tableAliases[table] = table.alias()
         }
     }
 
-    operator fun invoke(block: Join.() -> Unit): JoinExpression? {
-        block()
-        return build()
+    override fun tableAlias(table: Table): String? {
+        return tableAliases[table]
+    }
+}
+
+class Join private constructor(
+    private val mainTable: Table,
+    private val context: JoinContext? = null,
+    private val columns: Array<out Column<*>>
+) {
+    var currentJoin: JoinExpression? = null
+
+    companion object {
+        operator fun invoke(
+            mainTable: Table,
+            context: JoinContext? = null,
+            vararg columns: Column<*>,
+            block: Join.() -> Unit
+        ): Join? {
+            return Join(mainTable, context ?: TableJoinContext(), columns).apply(block)
+        }
+    }
+
+    private fun createJoin(left: Column<*>, right: Column<*>, type: JoinType) {
+        val leftTable = left.table()
+        val rightTable = right.table()
+
+        val tableToJoin = when {
+            leftTable == mainTable -> rightTable
+            rightTable == mainTable -> leftTable
+            context?.tableAlias(rightTable) == null -> rightTable
+            else -> leftTable
+        }
+
+        context?.addTable(tableToJoin)
+
+        currentJoin = TableJoinExpr(
+            table = tableToJoin,
+            columns = columns.toList(),
+            type = type,
+            condition = JoinCondition(left, right),
+            context = context
+        )
     }
 
     infix fun <T : Any> Column<T>.left(other: Column<*>) =
@@ -39,18 +81,4 @@ class Join private constructor(private val columns: Array<out Column<*>>) {
 
     infix fun <T : Any> Column<T>.full(other: Column<*>) =
         createJoin(this, other, FULL)
-
-    private fun createJoin(left: Column<*>, right: Column<*>, type: JoinType) {
-        currentJoin = TableJoinExpr(
-            table = right.table(),
-            columns = columns.toList(),
-            type = type,
-            condition = JoinCondition(left, right)
-        )
-    }
-
-    fun build(): JoinExpression? {
-        require(currentJoin != null) { "No join condition specified" }
-        return currentJoin
-    }
 }
