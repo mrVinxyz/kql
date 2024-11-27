@@ -207,7 +207,7 @@ class WhereTest {
     }
 
     @Test
-    fun `test AND combinations`() {
+    fun `test AND group combination`() {
         val nullGuild: String? = null
         val where = Where(WizardsTable) {
             WizardsTable.level gte 5
@@ -220,12 +220,12 @@ class WhereTest {
             }
         }.toFragment()
 
-        assertEquals("w.level >= ? AND w.power_level > ? AND w.mana_capacity > ?", where?.sql)
+        assertEquals("w.level >= ? AND (w.power_level > ? AND w.mana_capacity > ?)", where?.sql)
         assertEquals(listOf(5, 100.0f, 200.0f), where?.args)
     }
 
     @Test
-    fun `test OR combinations`() {
+    fun `test OR group combination`() {
         val nullElement: String? = null
         val where = Where(SpellsTable) {
             or {
@@ -237,7 +237,7 @@ class WhereTest {
             }
         }.toFragment()
 
-        assertEquals("s.element = ? OR s.element = ?", where?.sql)
+        assertEquals("(s.element = ? OR s.element = ?)", where?.sql)
         assertEquals(listOf("fire", "water"), where?.args)
     }
 
@@ -261,7 +261,7 @@ class WhereTest {
     fun `test GROUP conditions`() {
         val nullPower: Float? = null
         val where = Where(WizardsTable) {
-            group {
+            and {
                 WizardsTable.level gt 5
                 WizardsTable.powerLevel gt 100.0f
                 nullable {
@@ -278,20 +278,16 @@ class WhereTest {
     fun `test complex nested conditions`() {
         val nullGuild: String? = null
         val where = Where(WizardsTable) {
-            and {
-                WizardsTable.level gte 10
-                group {
-                    or {
-                        WizardsTable.guild eq "Fire Mages"
-                        WizardsTable.guild eq "Water Mages"
-                        nullable {
-                            WizardsTable.specialization eq nullGuild
-                        }
-                    }
+            WizardsTable.level gte 10
+            or {
+                WizardsTable.guild eq "Fire Mages"
+                WizardsTable.guild eq "Water Mages"
+                nullable {
+                    WizardsTable.specialization eq nullGuild
                 }
-                not {
-                    WizardsTable.alignment eq "Evil"
-                }
+            }
+            not {
+                WizardsTable.alignment eq "Evil"
             }
         }.toFragment()
 
