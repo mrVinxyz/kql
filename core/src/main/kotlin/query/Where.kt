@@ -38,17 +38,31 @@ class Where(private val table: Table, private val blockOperator: String = "AND")
         if (predicate) block()
     }
 
-    fun or(init: Where.() -> Unit) {
-        val subWhere = Where(table, "OR").apply(init)
-        subWhere.expression?.let { subExpr ->
-            addExpression(subExpr)
-        }
-    }
-
     fun and(init: Where.() -> Unit) {
         val subWhere = Where(table, "AND").apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(subExpr)
+            addExpression(GroupExpr(subExpr))
+        }
+    }
+
+    fun or(init: Where.() -> Unit) {
+        val subWhere = Where(table, "OR").apply(init)
+        subWhere.expression?.let { subExpr ->
+            addExpression(GroupExpr(subExpr))
+        }
+    }
+
+    fun group(init: Where.() -> Unit) {
+        val subWhere = Where(table, blockOperator).apply(init)
+        subWhere.expression?.let { subExpr ->
+            addExpression(GroupExpr(subExpr))
+        }
+    }
+
+    fun not(init: Where.() -> Unit) {
+        val subWhere = Where(table).apply(init)
+        subWhere.expression?.let { subExpr ->
+            addExpression(LogicalExpr("NOT", listOf(subExpr)))
         }
     }
 
@@ -75,13 +89,6 @@ class Where(private val table: Table, private val blockOperator: String = "AND")
 
     infix fun <T : Comparable<T>> Column<T>.gte(value: T) {
         addExpression(ComparisonExpr(this, ComparisonOperator.GREATER_THAN_OR_EQUAL, value))
-    }
-
-    fun not(init: Where.() -> Unit) {
-        val subWhere = Where(table).apply(init)
-        subWhere.expression?.let { subExpr ->
-            addExpression(LogicalExpr("NOT", listOf(subExpr)))
-        }
     }
 
     // Non-null list operations
@@ -132,27 +139,6 @@ class Where(private val table: Table, private val blockOperator: String = "AND")
 
     infix fun Column<String>.notLike(pattern: String) {
         addExpression(ComparisonExpr(this, ComparisonOperator.NOT_LIKE, pattern))
-    }
-
-    fun group(init: Where.() -> Unit) {
-        val subWhere = Where(table, blockOperator).apply(init)
-        subWhere.expression?.let { subExpr ->
-            addExpression(GroupExpr(subExpr))
-        }
-    }
-
-    fun withOr(init: Where.() -> Unit) {
-        val subWhere = Where(table, "OR").apply(init)
-        subWhere.expression?.let { subExpr ->
-            addExpression(GroupExpr(subExpr))
-        }
-    }
-
-    fun withAnd(init: Where.() -> Unit) {
-        val subWhere = Where(table, "AND").apply(init)
-        subWhere.expression?.let { subExpr ->
-            addExpression(GroupExpr(subExpr))
-        }
     }
 }
 
@@ -254,32 +240,33 @@ class NullableWhere(
         pattern?.let { addExpression(ComparisonExpr(this, ComparisonOperator.NOT_LIKE, it)) }
     }
 
+
     // Logical grouping
-    fun not(init: NullableWhere.() -> Unit) {
+    fun group(init: NullableWhere.() -> Unit) {
         val subWhere = NullableWhere(table, blockOperator).apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(LogicalExpr("NOT", listOf(subExpr)))
+            addExpression(GroupExpr(subExpr))
         }
     }
 
     fun and(init: NullableWhere.() -> Unit) {
         val subWhere = NullableWhere(table, "AND").apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(subExpr)
+            addExpression(GroupExpr(subExpr))
         }
     }
 
     fun or(init: NullableWhere.() -> Unit) {
         val subWhere = NullableWhere(table, "OR").apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(subExpr)
+            addExpression(GroupExpr(subExpr))
         }
     }
 
-    fun group(init: NullableWhere.() -> Unit) {
+    fun not(init: NullableWhere.() -> Unit) {
         val subWhere = NullableWhere(table, blockOperator).apply(init)
         subWhere.expression?.let { subExpr ->
-            addExpression(GroupExpr(subExpr))
+            addExpression(LogicalExpr("NOT", listOf(subExpr)))
         }
     }
 }
