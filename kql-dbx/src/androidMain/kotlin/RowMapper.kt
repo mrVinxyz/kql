@@ -69,18 +69,13 @@ value class Rows(private val cursor: Cursor) : Iterable<Row>, AutoCloseable {
 /** Converts a [Cursor] to an [Iterator] of [Row] objects. */
 fun Cursor.iterator(): Iterator<Row> =
     object : Iterator<Row> {
-        private var isFirst = true
+        var itHasNext: Boolean? = null
 
-        override fun hasNext(): Boolean {
-            if (isFirst) {
-                isFirst = false
-                return position < count && !isAfterLast
-            }
-            return moveToNext()
-        }
+        override fun hasNext() = itHasNext ?: this@iterator.moveToNext().also { itHasNext = it }
 
         override fun next(): Row {
-            if (!hasNext()) throw NoSuchElementException("No more rows in Cursor.")
+            val hasNext = itHasNext?.also { itHasNext = null } ?: this@iterator.moveToNext()
+            if (!hasNext) throw NoSuchElementException("No more rows in Cursor.")
             return Row(this@iterator)
         }
     }
